@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #2563EB;
+  --primary-hover: #1E3A8A;
+  --neutral-white: #FFFFFF;
+  --neutral-mist: #F1F5F9;
+  --neutral-carbon: #0F172A;
+  --neutral-slate: #64748B;
+  --neutral-outline: #E2E8F0;
+  --student-orange: #F97316;
+  --tutor-teal: #0D9488;
+}
+
+body {
+  @apply bg-neutral-mist text-neutral-carbon font-body antialiased;
+}
+
+.font-display {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+.font-body {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.shadow-card {
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.1), 0 2px 4px -1px rgba(37, 99, 235, 0.06);
+}
+
+.shadow-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.15);
+}
+
+.btn-primary {
+  @apply bg-primary text-white font-medium rounded-button px-6 py-3 shadow-button hover:bg-primary-hover transition-colors;
+}
+
+.btn-secondary {
+  @apply bg-neutral-mist text-primary border-2 border-transparent rounded-button px-6 py-3 font-medium hover:border-student-orange transition-colors;
+}

@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Environment (never commit secrets)
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build / output
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+logs/
+
+# Runtime / cache
+.npm
+.yarn/
+.cache/
+.turbo/
+.vercel/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Optional (uncomment if you use them)
+# *.local
+# .cursor/

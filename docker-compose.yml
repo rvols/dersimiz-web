@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: dersimiz-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://dersimiz:dersimiz@postgres:5432/dersimiz
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-admin-change-me}
+    volumes:
+      - ./api/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - dersimiz-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: dersimiz-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=dersimiz
+      - POSTGRES_USER=dersimiz
+      - POSTGRES_PASSWORD=dersimiz
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./api/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dersimiz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dersimiz-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: dersimiz-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - dersimiz-network
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: dersimiz-web
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      - api
+    networks:
+      - dersimiz-network
+
+networks:
+  dersimiz-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

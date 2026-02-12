@@ -50,3 +50,6 @@ coverage/
 
 # Lint / type check cache
 .eslintcache
+
+# Uploads (user-uploaded files)
+api/uploads/

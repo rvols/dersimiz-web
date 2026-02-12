@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Outfit, Inter } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { Toaster } from 'sonner';
 import './globals.css';
 
 const outfit = Outfit({
@@ -33,6 +34,7 @@ export default async function RootLayout({
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
+          <Toaster position="top-center" richColors closeButton />
         </NextIntlClientProvider>
       </body>
     </html>

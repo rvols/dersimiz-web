@@ -8,11 +8,20 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+const IMAGE_MIMES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => cb(null, `avatar-${uuidv4()}${path.extname(file.originalname) || '.jpg'}`),
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const mime = (file.mimetype || '').toLowerCase();
+    if (IMAGE_MIMES.includes(mime)) return cb(null, true);
+    cb(new Error('Only image files (JPEG, PNG, WebP, GIF) are allowed'));
+  },
+});
 
 // GET /api/v1/profile
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
@@ -27,11 +36,12 @@ router.get('/', requireAuth, async (req: AuthRequest, res) => {
     avatar_url: string | null;
     is_approved: boolean;
     is_banned: boolean;
+    is_rejected: boolean;
     onboarding_completed: boolean;
     created_at: Date;
     updated_at: Date;
   }>(
-    'SELECT id, phone_number, country_code, role, full_name, school_name, grade_id, avatar_url, is_approved, is_banned, onboarding_completed, created_at, updated_at FROM profiles WHERE id = $1 AND deleted_at IS NULL',
+    'SELECT id, phone_number, country_code, role, full_name, school_name, grade_id, avatar_url, is_approved, is_banned, COALESCE(is_rejected, false) as is_rejected, onboarding_completed, created_at, updated_at FROM profiles WHERE id = $1 AND deleted_at IS NULL',
     [req.userId]
   );
   const user = result.rows[0];
@@ -80,23 +90,62 @@ router.put('/', requireAuth, async (req: AuthRequest, res) => {
   if (updates.length === 0) {
     return success(res, { message: 'No updates' });
   }
+  // Updating name resets approval status to Pending (admin must re-review)
+  if (typeof full_name === 'string') {
+    updates.push(`is_approved = false`);
+    updates.push(`is_rejected = false`);
+  }
   updates.push(`updated_at = NOW()`);
   values.push(req.userId);
   await query(
     `UPDATE profiles SET ${updates.join(', ')} WHERE id = $${i} AND deleted_at IS NULL`,
     values
   );
-  return success(res, { message: 'Profile updated' });
+  const userResult = await query<{
+    id: string; phone_number: string; country_code: string; role: string | null;
+    full_name: string | null; school_name: string | null; grade_id: string | null;
+    avatar_url: string | null; is_approved: boolean; is_banned: boolean; is_rejected: boolean;
+    onboarding_completed: boolean; created_at: Date; updated_at: Date;
+  }>(
+    'SELECT id, phone_number, country_code, role, full_name, school_name, grade_id, avatar_url, is_approved, is_banned, COALESCE(is_rejected, false) as is_rejected, onboarding_completed, created_at, updated_at FROM profiles WHERE id = $1 AND deleted_at IS NULL',
+    [req.userId]
+  );
+  const user = userResult.rows[0];
+  return success(res, user ? { user } : { message: 'Profile updated' });
 });
 
-// POST /api/v1/profile/avatar
-router.post('/avatar', requireAuth, upload.single('avatar'), async (req: AuthRequest, res) => {
+// POST /api/v1/profile/avatar - images only (JPEG, PNG, WebP, GIF)
+router.post('/avatar', requireAuth, (req, res, next) => {
+  upload.single('avatar')(req, res, (err: unknown) => {
+    if (err) {
+      const msg = err instanceof Error ? err.message : 'Invalid file';
+      if (msg.includes('image files') || msg.includes('Only image')) return error(res, 'VALIDATION_ERROR', msg, 400);
+      next(err);
+      return;
+    }
+    next();
+  });
+}, async (req: AuthRequest, res) => {
   const file = req.file;
   if (!file) return error(res, 'VALIDATION_ERROR', 'avatar file required', 400);
-  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-  const avatar_url = `${baseUrl}/uploads/${file.filename}`;
-  await query('UPDATE profiles SET avatar_url = $1, updated_at = NOW() WHERE id = $2', [avatar_url, req.userId]);
-  return success(res, { avatar_url });
+  const baseUrl = process.env.BASE_URL || (req.protocol + '://' + (req.get('host') || 'localhost:' + (process.env.PORT || 3000)));
+  const avatar_url = `${baseUrl.replace(/\/$/, '')}/uploads/${file.filename}`;
+  // Changing profile image resets approval status to Pending (admin must re-review)
+  await query(
+    'UPDATE profiles SET avatar_url = $1, is_approved = false, is_rejected = false, updated_at = NOW() WHERE id = $2',
+    [avatar_url, req.userId]
+  );
+  const userResult = await query<{
+    id: string; phone_number: string; country_code: string; role: string | null;
+    full_name: string | null; school_name: string | null; grade_id: string | null;
+    avatar_url: string | null; is_approved: boolean; is_banned: boolean; is_rejected: boolean;
+    onboarding_completed: boolean; created_at: Date; updated_at: Date;
+  }>(
+    'SELECT id, phone_number, country_code, role, full_name, school_name, grade_id, avatar_url, is_approved, is_banned, COALESCE(is_rejected, false) as is_rejected, onboarding_completed, created_at, updated_at FROM profiles WHERE id = $1 AND deleted_at IS NULL',
+    [req.userId]
+  );
+  const user = userResult.rows[0];
+  return success(res, user ? { user, avatar_url } : { avatar_url });
 });
 
 // DELETE /api/v1/profile - soft delete

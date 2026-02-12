@@ -1,11 +1,39 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+function useSupportBadge() {
+  const [count, setCount] = useState(0);
+  const pathname = usePathname();
+  const fetchCount = useCallback(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    if (!token) return;
+    fetch(`${API_URL}/api/v1/admin/support-tickets/count`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data?.data?.count === 'number') setCount(data.data.count);
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    fetchCount();
+    const interval = setInterval(fetchCount, pathname?.startsWith('/admin/support') ? 10000 : 30000);
+    return () => clearInterval(interval);
+  }, [fetchCount, pathname]);
+  useEffect(() => {
+    const onRefresh = () => fetchCount();
+    window.addEventListener('admin:support-badge-refresh', onRefresh);
+    return () => window.removeEventListener('admin:support-badge-refresh', onRefresh);
+  }, [fetchCount]);
+  return count;
+}
 const COOKIE_NAME = 'NEXT_LOCALE';
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;
 
@@ -23,6 +51,7 @@ export default function AdminAppLayout({
   const locale = useLocale();
   const t = useTranslations('admin_panel');
   const [admin, setAdmin] = useState<{ email: string; full_name: string | null } | null>(null);
+  const supportBadge = useSupportBadge();
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
@@ -92,13 +121,18 @@ export default function AdminAppLayout({
             <Link
               key={item.href}
               href={item.href}
-              className={`block px-4 py-3 rounded-button font-medium transition-colors ${
+              className={`relative block px-4 py-3 rounded-button font-medium transition-colors ${
                 pathname === item.href
                   ? 'bg-primary/10 text-primary'
                   : 'text-neutral-slate hover:bg-neutral-mist hover:text-neutral-carbon'
               }`}
             >
               {t(item.labelKey)}
+              {item.href === '/admin/support' && supportBadge > 0 && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[1.25rem] h-5 px-1.5 flex items-center justify-center rounded-full bg-student-coral text-white text-xs font-bold">
+                  {supportBadge > 99 ? '99+' : supportBadge}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

@@ -12,11 +12,30 @@ function requireTutor(req: AuthRequest, res: Response, next: NextFunction) {
   next();
 }
 
-// GET /api/v1/tutor/dashboard - stats for dashboard (impressions, contacts, completeness, subscription)
+// Helper: compute total hours from weekly slots (slots are array of { day, start, end } or similar)
+function totalHoursFromSlots(slots: unknown): number {
+  if (!Array.isArray(slots)) return 0;
+  let total = 0;
+  for (const slot of slots) {
+    if (slot && typeof slot === 'object' && 'start' in slot && 'end' in slot) {
+      const s = String((slot as { start?: string }).start || '').trim();
+      const e = String((slot as { end?: string }).end || '').trim();
+      if (s && e) {
+        const [sh, sm] = s.split(':').map(Number);
+        const [eh, em] = e.split(':').map(Number);
+        total += (eh * 60 + (isNaN(em) ? 0 : em) - (sh * 60 + (isNaN(sm) ? 0 : sm))) / 60;
+      }
+    }
+  }
+  return Math.max(0, total);
+}
+
+// GET /api/v1/tutor/dashboard - stats for dashboard (impressions, contacts, completeness, subscription, missing_fields, total_availability_hours, grade_count)
 router.get('/dashboard', requireAuth, requireTutor, async (req: AuthRequest, res) => {
-  const [convs, lessons, profile, availability, sub] = await Promise.all([
+  const [convs, lessons, grades, profile, availability, sub] = await Promise.all([
     query<{ count: string }>('SELECT COUNT(*) as count FROM conversations WHERE tutor_id = $1', [req.userId]),
     query<{ count: string }>('SELECT COUNT(*) as count FROM tutor_lessons WHERE tutor_id = $1', [req.userId]),
+    query<{ count: string }>('SELECT COUNT(*) as count FROM tutor_grades WHERE tutor_id = $1', [req.userId]),
     query<{ full_name: string | null; avatar_url: string | null }>(
       'SELECT full_name, avatar_url FROM profiles WHERE id = $1',
       [req.userId]
@@ -28,26 +47,45 @@ router.get('/dashboard', requireAuth, requireTutor, async (req: AuthRequest, res
     ),
   ]);
   const lessonCount = parseInt(lessons.rows[0]?.count ?? '0', 10);
+  const gradeCount = parseInt(grades.rows[0]?.count ?? '0', 10);
   const p = profile.rows[0];
-  const hasSlots = availability.rows[0]?.slots && Array.isArray(availability.rows[0].slots) && (availability.rows[0].slots as unknown[]).length > 0;
+  const slots = availability.rows[0]?.slots;
+  const hasSlots = slots && Array.isArray(slots) && (slots as unknown[]).length > 0;
+  const totalAvailabilityHours = totalHoursFromSlots(slots);
+
+  // Tutor completeness: name, avatar, lessons, availability only (school/grade are student-specific)
+  const missing_fields: string[] = [];
+  if (!p?.full_name?.trim()) missing_fields.push('bio');
+  if (!p?.avatar_url) missing_fields.push('avatar');
+  if (lessonCount === 0) missing_fields.push('lessons');
+  if (!hasSlots) missing_fields.push('availability');
+
   let completeness = 0;
   if (p?.full_name) completeness += 25;
   if (p?.avatar_url) completeness += 25;
   if (lessonCount > 0) completeness += 25;
   if (hasSlots) completeness += 25;
-  let subscription_status = null;
+
+  let subscription_status: string | null = null;
   if (sub.rows[0]) {
     const plan = await query<{ slug: string; display_name: unknown }>(
       'SELECT slug, display_name FROM subscription_plans WHERE id = $1',
       [sub.rows[0].plan_id]
     );
-    subscription_status = { plan_slug: plan.rows[0]?.slug ?? null, plan_name: plan.rows[0]?.display_name ?? null };
+    const name = plan.rows[0]?.display_name;
+    subscription_status = typeof name === 'object' && name !== null && 'tr' in (name as object)
+      ? String((name as { tr?: string }).tr ?? (name as { en?: string }).en ?? plan.rows[0]?.slug ?? '')
+      : String(name ?? plan.rows[0]?.slug ?? '');
   }
+
   return success(res, {
     impressions: 0,
     contacts: parseInt(convs.rows[0]?.count ?? '0', 10),
     lesson_count: lessonCount,
+    grade_count: gradeCount,
     profile_completeness: completeness,
+    missing_fields,
+    total_availability_hours: Math.round(totalAvailabilityHours * 10) / 10,
     subscription_status,
     profile: p,
   });

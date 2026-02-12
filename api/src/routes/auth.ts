@@ -117,10 +117,11 @@ router.post('/verify-otp', async (req, res) => {
     full_name: string | null;
     role: string | null;
     is_approved: boolean;
+    is_rejected: boolean;
     onboarding_completed: boolean;
     avatar_url: string | null;
   }>(
-    'SELECT id, phone_number, full_name, role, is_approved, onboarding_completed, avatar_url FROM profiles WHERE phone_number = $1 AND deleted_at IS NULL',
+    'SELECT id, phone_number, full_name, role, is_approved, COALESCE(is_rejected, false) as is_rejected, onboarding_completed, avatar_url FROM profiles WHERE phone_number = $1 AND deleted_at IS NULL',
     [phone_number]
   );
   let user = userResult.rows[0];
@@ -138,6 +139,7 @@ router.post('/verify-otp', async (req, res) => {
       full_name: null,
       role: null,
       is_approved: false,
+      is_rejected: false,
       onboarding_completed: false,
       avatar_url: null,
     };
@@ -194,6 +196,7 @@ router.post('/verify-otp', async (req, res) => {
       full_name: user.full_name,
       role: user.role,
       is_approved: user.is_approved,
+      is_rejected: user.is_rejected ?? false,
       onboarding_completed: user.onboarding_completed,
       avatar_url: user.avatar_url,
     },

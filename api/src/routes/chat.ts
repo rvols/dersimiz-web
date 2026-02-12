@@ -160,6 +160,19 @@ router.post('/conversations/:id/messages', requireAuth, async (req: AuthRequest,
     'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1',
     [id]
   );
+  const recipientId = tutor_id === req.userId ? student_id : tutor_id;
+  const pref = await query<{ new_message: boolean }>(
+    'SELECT new_message FROM notification_preferences WHERE user_id = $1',
+    [recipientId]
+  );
+  const shouldNotify = pref.rows.length === 0 || pref.rows[0].new_message;
+  if (shouldNotify) {
+    const preview = type === 'text' && typeof content === 'string' ? content.slice(0, 100) : type === 'contact_share' ? 'Contact shared' : type === 'demo_request' ? 'Demo request' : 'New message';
+    await query(
+      `INSERT INTO notifications_log (user_id, type, title, body, data) VALUES ($1, 'new_message', $2, $3, $4)`,
+      [recipientId, 'New message', preview, JSON.stringify({ conversation_id: id, sender_id: req.userId, message_type: type })]
+    );
+  }
   return success(res, { message: msgResult.rows[0] });
 });
 

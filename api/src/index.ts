@@ -10,8 +10,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { createRedisRateLimitStore } from './middleware/rateLimitStore.js';
 import { getLocaleFromRequest } from './i18n/locale.js';
 import { getMessageOrFallback } from './i18n/messages.js';
+import { requireAdmin } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import adminAuthRoutes from './routes/adminAuth.js';
+import adminUsersRoutes from './routes/adminUsers.js';
 import publicRoutes from './routes/public.js';
 import profileRoutes from './routes/profile.js';
 import meRoutes from './routes/me.js';
@@ -77,6 +79,12 @@ app.use('/api/v1', apiLimiter);
 // Public and auth routes (no auth required)
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin/auth', adminAuthRoutes);
+
+// Admin routes (require admin JWT) - mount BEFORE /api/v1 to avoid being shadowed by public routes
+// Mount more specific /admin/users first so PUT /users/:id/profile is matched
+app.use('/api/v1/admin/users', requireAdmin, adminUsersRoutes);
+app.use('/api/v1/admin', adminRoutes);
+
 app.use('/api/v1', publicRoutes);
 
 // Protected mobile/user routes
@@ -89,9 +97,6 @@ app.use('/api/v1/chat', chatRoutes);
 app.use('/api/v1/support', supportRoutes);
 app.use('/api/v1/iap', iapRoutes);
 app.use('/api/v1/legal', legalRoutes);
-
-// Admin routes (require admin JWT)
-app.use('/api/v1/admin', adminRoutes);
 
 // Health check
 app.get('/health', (_req, res) => {

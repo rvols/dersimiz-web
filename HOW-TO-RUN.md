@@ -112,6 +112,7 @@ Optional (defaults are fine for local):
 - `ADMIN_PASSWORD` – admin password (default after seed: `Admin123!`)
 - `PORT` – API port (default 3000)
 - `GEMINI_API_KEY` – Google Gemini API key for AI chat moderation (Gemini 2.5 Flash). If unset, text messages are approved without moderation.
+- `BASE_URL` – Public API URL for avatar image links. If unset, uses the request host. When the mobile app uploads via a LAN IP (e.g. 192.168.1.122) and the admin uses localhost, the admin panel resolves avatar URLs to its `NEXT_PUBLIC_API_URL` so images load correctly.
 
 **SMS (OTP – Vatan SMS):**  
 To send real OTP codes by SMS, set these in `api/.env` (from [Vatan SMS](https://api.vatansms.net)):

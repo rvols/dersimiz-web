@@ -18,10 +18,11 @@ router.get('/settings', requireAuth, async (req: AuthRequest, res) => {
       grade_id: string | null;
       avatar_url: string | null;
       is_approved: boolean;
+      is_rejected: boolean;
       onboarding_completed: boolean;
       created_at: Date;
     }>(
-      'SELECT id, phone_number, country_code, role, full_name, school_name, grade_id, avatar_url, is_approved, onboarding_completed, created_at FROM profiles WHERE id = $1 AND deleted_at IS NULL',
+      'SELECT id, phone_number, country_code, role, full_name, school_name, grade_id, avatar_url, is_approved, COALESCE(is_rejected, false) as is_rejected, onboarding_completed, created_at FROM profiles WHERE id = $1 AND deleted_at IS NULL',
       [req.userId]
     ),
     query<{
